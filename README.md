@@ -3,6 +3,8 @@ redis-mount
 
 Use Redis as a filesystem
 
+![screenshot](./screenshot.gif)
+
 ```bash
   redis-mount 0.0.0
   $ redis-mount ~/redis
@@ -11,8 +13,6 @@ Use Redis as a filesystem
   --port, -p   6379         Redis port number
   --auth, -a                Redis password
 ```
-
-![screenshot](./screenshot.gif)
 
 ## Build Requirement
 
