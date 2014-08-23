@@ -12,6 +12,8 @@ Use Redis as a filesystem
   --auth, -a                Redis password
 ```
 
+![screenshot](./screenshot.png)
+
 ## Build Requirement
 
 * fuse
@@ -20,6 +22,20 @@ Use Redis as a filesystem
 
 ```bash
 $ go get github.com/poying/redis-mount
+```
+
+## Unmount
+
+Linux
+
+```bash
+$ fusermount -u /tmp/redis
+```
+
+MacOS
+
+```bash
+$ diskutil unmount /tmp/redis
 ```
 
 ## License
