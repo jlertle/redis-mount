@@ -12,7 +12,7 @@ Use Redis as a filesystem
   --auth, -a                Redis password
 ```
 
-![screenshot](./screenshot.png)
+![screenshot](./screenshot.gif)
 
 ## Build Requirement
 
