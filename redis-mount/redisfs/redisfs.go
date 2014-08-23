@@ -1,17 +1,15 @@
 package redisfs
 
 import "os"
+import "fmt"
 import "path"
 import "regexp"
 import "strings"
 import "strconv"
 import "github.com/hanwen/go-fuse/fuse"
 import "github.com/garyburd/redigo/redis"
-import . "github.com/visionmedia/go-debug"
 import "github.com/hanwen/go-fuse/fuse/nodefs"
 import "github.com/hanwen/go-fuse/fuse/pathfs"
-
-var debug = Debug("redisfs")
 
 type RedisFs struct {
 	pathfs.FileSystem
@@ -35,10 +33,7 @@ func (fs *RedisFs) ConnectRedis() (*RedisFs, error) {
 	address := fs.Host + ":" + strconv.Itoa(fs.Port)
 	conn, err := redis.Dial("tcp", address)
 
-	debug("connect to %s", address)
-
 	if err != nil {
-		debug("connect failed")
 		return nil, err
 	}
 
@@ -46,9 +41,7 @@ func (fs *RedisFs) ConnectRedis() (*RedisFs, error) {
 	fs.FileSystem = pathfs.NewDefaultFileSystem()
 
 	if len(fs.Auth) > 0 {
-		debug("auth")
 		if _, err := conn.Do("AUTH", fs.Auth); err != nil {
-			debug("auth failed");
 			conn.Close()
 			return nil, err
 		}
@@ -69,9 +62,6 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 	}
 
 	key := nameToKey(name)
-
-	debug("GetAttr %s %s", name, key)
-
 	content, err1 := redis.String(fs.conn.Do("GET", key))
 	list, err2 := redis.Strings(fs.conn.Do("KEYS", key + ":*"))
 
@@ -92,11 +82,8 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 	return nil, fuse.ENOENT
 }
 
-func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) (c []fuse.DirEntry, code fuse.Status) {
+func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
 	pattern := nameToPattern(name)
-
-	debug("OpenDir %s %s", name, pattern)
-
 	res, err := redis.Strings(fs.conn.Do("KEYS", pattern))
 
 	if err != nil {
@@ -108,11 +95,8 @@ func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) (c []fuse.DirEntry, c
 	return entries, fuse.OK
 }
 
-func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (file nodefs.File, code fuse.Status) {
+func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
 	key := nameToKey(name)
-
-	debug("Open %s %s", name, key)
-
 	content, err := redis.String(fs.conn.Do("GET", key))
 
 	if err != nil {
@@ -120,6 +104,66 @@ func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (file node
 	}
 
 	return nodefs.NewDataFile([]byte(content)), fuse.OK
+}
+
+func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
+	key := nameToKey(name)
+	_, err := fs.conn.Do("SET", key, "")
+
+	if err != nil {
+		return nil, fuse.ENOENT
+	}
+
+	return nodefs.NewDataFile([]byte("")), fuse.OK
+}
+
+func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
+	if name == "" {
+		return fuse.OK
+	}
+
+	key := nameToKey(name)
+	_, err := fs.conn.Do("DEL", key)
+
+	if err != nil {
+		return fuse.ENOENT
+	}
+
+	return fuse.OK
+}
+
+func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
+	if name == "" {
+		return fuse.OK
+	}
+
+	pattern := nameToPattern(name)
+	list, err := redis.Strings(fs.conn.Do("KEYS", pattern))
+
+	if err != nil {
+		return fuse.ENOENT
+	}
+
+	for _, el := range list {
+		_, err := fs.conn.Do("DEL", el)
+		if err != nil {
+			fmt.Printf("remove %s failed. (%s)", keyToName(el), err)
+			return fuse.ENOENT
+		}
+	}
+
+	return fuse.OK
+}
+
+func (fs *RedisFs) Mkdir(name string, mode uint32, ctx *fuse.Context) fuse.Status {
+	key := nameToKey(name) + ":.redis-mount-folder"
+	_, err := fs.conn.Do("SET", key, 1)
+
+	if err != nil {
+		return fuse.ENOENT
+	}
+
+	return fuse.OK
 }
 
 func nameToPattern(name string) string {
