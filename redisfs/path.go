@@ -5,7 +5,7 @@ import "fmt"
 import "path"
 import "regexp"
 import "strings"
-import "strconv"
+import "github.com/poying/go-chalk"
 import "github.com/hanwen/go-fuse/fuse"
 import "github.com/garyburd/redigo/redis"
 import "github.com/hanwen/go-fuse/fuse/nodefs"
@@ -13,41 +13,7 @@ import "github.com/hanwen/go-fuse/fuse/pathfs"
 
 type RedisFs struct {
 	pathfs.FileSystem
-	Host string
-	Port int
-	Auth string
-	conn redis.Conn
-}
-
-func New(host string, port int, auth string) *RedisFs {
-	fs := &RedisFs{
-		Host: host,
-		Port: port,
-		Auth: auth,
-		FileSystem: pathfs.NewDefaultFileSystem(),
-	}
-	return fs
-}
-
-func (fs *RedisFs) ConnectRedis() (*RedisFs, error) {
-	address := fs.Host + ":" + strconv.Itoa(fs.Port)
-	conn, err := redis.Dial("tcp", address)
-
-	if err != nil {
-		return nil, err
-	}
-
-	fs.conn = conn;
-	fs.FileSystem = pathfs.NewDefaultFileSystem()
-
-	if len(fs.Auth) > 0 {
-		if _, err := conn.Do("AUTH", fs.Auth); err != nil {
-			conn.Close()
-			return nil, err
-		}
-	}
-
-	return fs, nil
+	Conn redis.Conn
 }
 
 func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Status) {
@@ -62,8 +28,8 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 	}
 
 	key := nameToKey(name)
-	content, err1 := redis.String(fs.conn.Do("GET", key))
-	list, err2 := redis.Strings(fs.conn.Do("KEYS", key + ":*"))
+	content, err1 := redis.String(fs.Conn.Do("GET", key))
+	list, err2 := redis.Strings(fs.Conn.Do("KEYS", key + ":*"))
 
 	switch {
 	case err2 == nil && len(list) > 0:
@@ -84,9 +50,10 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 
 func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
 	pattern := nameToPattern(name)
-	res, err := redis.Strings(fs.conn.Do("KEYS", pattern))
+	res, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
 
 	if err != nil {
+		printError(err)
 		return nil, fuse.ENOENT
 	}
 
@@ -97,24 +64,26 @@ func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fus
 
 func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
 	key := nameToKey(name)
-	content, err := redis.String(fs.conn.Do("GET", key))
+	_, err := fs.Conn.Do("EXISTS", key)
 
 	if err != nil {
+		printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return nodefs.NewDataFile([]byte(content)), fuse.OK
+	return NewRedisFile(fs.Conn, key), fuse.OK
 }
 
 func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
 	key := nameToKey(name)
-	_, err := fs.conn.Do("SET", key, "")
+	_, err := fs.Conn.Do("SET", key, "")
 
 	if err != nil {
+		printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return nodefs.NewDataFile([]byte("")), fuse.OK
+	return NewRedisFile(fs.Conn, key), fuse.OK
 }
 
 func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
@@ -123,9 +92,10 @@ func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
 	}
 
 	key := nameToKey(name)
-	_, err := fs.conn.Do("DEL", key)
+	_, err := fs.Conn.Do("DEL", key)
 
 	if err != nil {
+		printError(err)
 		return fuse.ENOENT
 	}
 
@@ -138,16 +108,17 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 	}
 
 	pattern := nameToPattern(name)
-	list, err := redis.Strings(fs.conn.Do("KEYS", pattern))
+	list, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
 
 	if err != nil {
+		printError(err)
 		return fuse.ENOENT
 	}
 
 	for _, el := range list {
-		_, err := fs.conn.Do("DEL", el)
+		_, err := fs.Conn.Do("DEL", el)
 		if err != nil {
-			fmt.Printf("remove %s failed. (%s)", keyToName(el), err)
+			printError(err)
 			return fuse.ENOENT
 		}
 	}
@@ -157,9 +128,10 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 
 func (fs *RedisFs) Mkdir(name string, mode uint32, ctx *fuse.Context) fuse.Status {
 	key := nameToKey(name) + ":.redis-mount-folder"
-	_, err := fs.conn.Do("SET", key, 1)
+	_, err := fs.Conn.Do("SET", key, 1)
 
 	if err != nil {
+		printError(err)
 		return fuse.ENOENT
 	}
 
@@ -238,4 +210,8 @@ func decodePathSeparator(str string) string {
 	re := regexp.MustCompile("\uffff")
 	str = re.ReplaceAllLiteralString(str, string(os.PathSeparator))
 	return str;
+}
+
+func printError(err error) {
+	fmt.Printf("  %s: %s\n", chalk.Magenta("Error"), err)
 }
