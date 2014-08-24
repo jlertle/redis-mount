@@ -13,16 +13,9 @@ import "github.com/hanwen/go-fuse/fuse/pathfs"
 
 type RedisFs struct {
 	pathfs.FileSystem
-	conn redis.Conn
-	dirs map[string][]string
-}
-
-func NewRedisFs(fs pathfs.FileSystem, conn redis.Conn) *RedisFs {
-	return &RedisFs{
-		FileSystem: fs,
-		conn: conn,
-		dirs: make(map[string][]string),
-	}
+	Conn redis.Conn
+	Dirs map[string][]string
+	Sep string
 }
 
 func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Status) {
@@ -38,11 +31,11 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 	}
 
 	// find dir in memory
-	dirs, ok := fs.dirs[path.Dir(name)]
+	dirs, ok := fs.Dirs[path.Dir(name)]
 	baseName := path.Base(name)
 
 	if ok {
-		exist, _ := stringInSlice(baseName, dirs)
+		exist, _ := fs.stringInSlice(baseName, dirs)
 		if exist {
 			return &fuse.Attr{
 				Mode: fuse.S_IFDIR | 0755,
@@ -51,9 +44,9 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 	}
 
 	// find attr in redis
-	key := nameToKey(name)
-	content, err1 := redis.String(fs.conn.Do("GET", key))
-	list, err2 := redis.Strings(fs.conn.Do("KEYS", key + ":*"))
+	key := fs.nameToKey(name)
+	content, err1 := redis.String(fs.Conn.Do("GET", key))
+	list, err2 := redis.Strings(fs.Conn.Do("KEYS", key + fs.Sep + "*"))
 
 	switch {
 	case err2 == nil && len(list) > 0:
@@ -73,21 +66,21 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 }
 
 func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
-	pattern := nameToPattern(name)
-	res, err := redis.Strings(fs.conn.Do("KEYS", pattern))
+	pattern := fs.nameToPattern(name)
+	res, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
 
 	if err != nil {
-		printError(err)
+		fs.printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	entries := resToEntries(nameToKey(name), res)
+	entries := fs.resToEntries(fs.nameToKey(name), res)
 
 	if name == "" {
 		name = "."
 	}
 
-	if list, ok := fs.dirs[name]; ok {
+	if list, ok := fs.Dirs[name]; ok {
 		for _, key := range list {
 			entries = append(entries, fuse.DirEntry{
 				Name: key,
@@ -100,27 +93,27 @@ func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fus
 }
 
 func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
-	key := nameToKey(name)
-	_, err := fs.conn.Do("EXISTS", key)
+	key := fs.nameToKey(name)
+	_, err := fs.Conn.Do("EXISTS", key)
 
 	if err != nil {
-		printError(err)
+		fs.printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return NewRedisFile(fs.conn, key), fuse.OK
+	return NewRedisFile(fs.Conn, key), fuse.OK
 }
 
 func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
-	key := nameToKey(name)
-	_, err := fs.conn.Do("SET", key, "")
+	key := fs.nameToKey(name)
+	_, err := fs.Conn.Do("SET", key, "")
 
 	if err != nil {
-		printError(err)
+		fs.printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return NewRedisFile(fs.conn, key), fuse.OK
+	return NewRedisFile(fs.Conn, key), fuse.OK
 }
 
 func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
@@ -128,11 +121,11 @@ func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
 		return fuse.OK
 	}
 
-	key := nameToKey(name)
-	_, err := fs.conn.Do("DEL", key)
+	key := fs.nameToKey(name)
+	_, err := fs.Conn.Do("DEL", key)
 
 	if err != nil {
-		printError(err)
+		fs.printError(err)
 		return fuse.ENOENT
 	}
 
@@ -146,30 +139,30 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 
 	// check if name is in memory
 	dirName := path.Dir(name)
-	dir, ok := fs.dirs[dirName]
+	dir, ok := fs.Dirs[dirName]
 	baseName := path.Base(name)
 	
 	if ok {
-		exist, index := stringInSlice(baseName, dir)
+		exist, index := fs.stringInSlice(baseName, dir)
 		if exist {
-			fs.dirs[dirName] = append(dir[:index], dir[index + 1:]...)
+			fs.Dirs[dirName] = append(dir[:index], dir[index + 1:]...)
 			return fuse.OK
 		}
 	}
 
 	// if name isn't in memory then find it in redis
-	pattern := nameToPattern(name)
-	list, err := redis.Strings(fs.conn.Do("KEYS", pattern))
+	pattern := fs.nameToPattern(name)
+	list, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
 
 	if err != nil {
-		printError(err)
+		fs.printError(err)
 		return fuse.ENOENT
 	}
 
 	for _, el := range list {
-		_, err := fs.conn.Do("DEL", el)
+		_, err := fs.Conn.Do("DEL", el)
 		if err != nil {
-			printError(err)
+			fs.printError(err)
 			return fuse.ENOENT
 		}
 	}
@@ -180,30 +173,30 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 func (fs *RedisFs) Mkdir(name string, mode uint32, ctx *fuse.Context) fuse.Status {
 	dir := path.Join(name, "..")
 
-	_, ok := fs.dirs[dir]
+	_, ok := fs.Dirs[dir]
 
 	if !ok {
-		fs.dirs[dir] = make([]string, 0, 10)
+		fs.Dirs[dir] = make([]string, 0, 10)
 	}
 
-	fs.dirs[dir] = append(fs.dirs[dir], path.Base(name))
+	fs.Dirs[dir] = append(fs.Dirs[dir], path.Base(name))
 
 	return fuse.OK
 }
 
-func nameToPattern(name string) string {
-	pattern := nameToKey(name)
+func (fs *RedisFs) nameToPattern(name string) string {
+	pattern := fs.nameToKey(name)
 
 	if name == "" {
 		pattern += "*"
 	} else {
-		pattern += ":*"
+		pattern += fs.Sep + "*"
 	}
 
 	return pattern;
 }
 
-func resToEntries(root string, list []string) []fuse.DirEntry {
+func (fs *RedisFs) resToEntries(root string, list []string) []fuse.DirEntry {
 	m := make(map[string]bool)
 	entries := make([]fuse.DirEntry, 0)
 	offset := len(root)
@@ -216,15 +209,15 @@ func resToEntries(root string, list []string) []fuse.DirEntry {
 	for _, el := range list {
 		key := el[offset:]
 
-		switch strings.Count(key, ":") {
+		switch strings.Count(key, fs.Sep) {
 		case 0:
 			entries = append(entries, fuse.DirEntry{
-				Name: keyToName(key),
+				Name: fs.keyToName(key),
 				Mode: fuse.S_IFREG,
 			})
 			break
 		case sepCount:
-			key = path.Clean(path.Join(keyToName(key), ".."))
+			key = path.Clean(path.Join(fs.keyToName(key), ".."))
 			_, ok := m[key]
 			if !ok {
 				m[key] = true
@@ -239,37 +232,37 @@ func resToEntries(root string, list []string) []fuse.DirEntry {
 	return entries
 }
 
-func nameToKey(name string) string {
+func (fs *RedisFs) nameToKey(name string) string {
 	re := regexp.MustCompile(string(os.PathSeparator))
-	key := re.ReplaceAllLiteralString(name, ":")
-	key = decodePathSeparator(key)
+	key := re.ReplaceAllLiteralString(name, fs.Sep)
+	key = fs.decodePathSeparator(key)
 	return key
 }
 
-func keyToName(key string) string {
-	name := encodePathSeparator(key)
-	re := regexp.MustCompile(":")
+func (fs *RedisFs) keyToName(key string) string {
+	name := fs.encodePathSeparator(key)
+	re := regexp.MustCompile(fs.Sep)
 	name = re.ReplaceAllLiteralString(name, string(os.PathSeparator))
 	return name
 }
 
-func encodePathSeparator(str string) string {
+func (fs *RedisFs) encodePathSeparator(str string) string {
 	re := regexp.MustCompile(string(os.PathSeparator))
 	str = re.ReplaceAllLiteralString(str, "\uffff")
 	return str;
 }
 
-func decodePathSeparator(str string) string {
+func (fs *RedisFs) decodePathSeparator(str string) string {
 	re := regexp.MustCompile("\uffff")
 	str = re.ReplaceAllLiteralString(str, string(os.PathSeparator))
 	return str;
 }
 
-func printError(err error) {
+func (fs *RedisFs) printError(err error) {
 	fmt.Printf("  %s: %s\n", chalk.Magenta("Error"), err)
 }
 
-func stringInSlice(target string, list []string) (bool, int) {
+func (fs *RedisFs) stringInSlice(target string, list []string) (bool, int) {
 	for i, str := range list {
 		if str == target {
 			return true, i

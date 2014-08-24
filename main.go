@@ -18,6 +18,9 @@ var App *cli.App
 // app name
 var Name = "redis-mount"
 
+// app version
+var Version = "0.0.0"
+
 // redis host name
 var HostFlag = cli.StringFlag{
 	Name: "host, h",
@@ -38,14 +41,24 @@ var AuthFlag = cli.StringFlag{
 	Usage: "Redis password",
 }
 
+// redis key separator
+var SepFlag = cli.StringFlag{
+	Name: "sep, s",
+	Value: ":",
+	Usage: "Redis key separator",
+}
+
 func main() {
 	App = cli.NewApp()
 	App.HideHelp = true
 	App.Name = Name
+	App.Version = Version
 
 	App.Flags = []cli.Flag {
 		HostFlag,
 		PortFlag,
+		AuthFlag,
+		SepFlag,
 	}
 
 	App.Action = run
@@ -54,18 +67,12 @@ func main() {
 }
 
 func run(ctx *cli.Context) {
-	args := ctx.Args()
-	
-	if len(args) == 0 {
+	if len(ctx.Args()) == 0 {
 	  PrintHelpMessage();
 		return;
 	}
 
-	server, err := mount(
-		ctx.String("host"),
-		ctx.Int("port"),
-		ctx.String("auth"),
-		args.Get(0))
+	server, err := mount(ctx)
   
 	if err != nil {
 		fmt.Printf("\n  %s: %s\n\n", chalk.Magenta("Error"), err)
@@ -75,20 +82,28 @@ func run(ctx *cli.Context) {
 	server.Serve()
 }
 
-func mount(host string, port int, auth string, mnt string) (*fuse.Server, error) {
-	mnt, err := filepath.Abs(mnt)
+func mount(ctx *cli.Context) (*fuse.Server, error) {
+	mnt, err := filepath.Abs(ctx.Args().Get(0))
 
 	if (err != nil) {
 		return nil, err
 	}
 
-	conn, err := newRedisConn(host, port, auth)
+	conn, err := newRedisConn(
+		ctx.String("host"),
+		ctx.Int("port"),
+		ctx.String("auth"))
 
 	if err != nil {
 		return nil, err
 	}
 
-	fs := redisfs.NewRedisFs(pathfs.NewDefaultFileSystem(), conn)
+	fs := &redisfs.RedisFs{
+		FileSystem: pathfs.NewDefaultFileSystem(),
+		Conn: conn,
+		Dirs: make(map[string][]string),
+		Sep: ctx.String("sep"),
+	}
 
 	if (err != nil) {
 		return nil, err
@@ -136,6 +151,9 @@ func PrintHelpMessage() {
 
 	fmt.Printf("  %-12s %-12v %s\n",
 		prefixNames(AuthFlag.Name), AuthFlag.Value, AuthFlag.Usage)
+
+	fmt.Printf("  %-12s %-12v %s\n",
+		prefixNames(SepFlag.Name), SepFlag.Value, SepFlag.Usage)
 
 	println()
 }
