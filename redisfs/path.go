@@ -13,7 +13,16 @@ import "github.com/hanwen/go-fuse/fuse/pathfs"
 
 type RedisFs struct {
 	pathfs.FileSystem
-	Conn redis.Conn
+	conn redis.Conn
+	dirs map[string][]string
+}
+
+func NewRedisFs(fs pathfs.FileSystem, conn redis.Conn) *RedisFs {
+	return &RedisFs{
+		FileSystem: fs,
+		conn: conn,
+		dirs: make(map[string][]string),
+	}
 }
 
 func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Status) {
@@ -23,13 +32,28 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 		}, fuse.OK
 	}
 
+	// ignore hidden files
 	if string(name[0]) == "." {
 		return nil, fuse.ENOENT
 	}
 
+	// find dir in memory
+	dirs, ok := fs.dirs[path.Dir(name)]
+	baseName := path.Base(name)
+
+	if ok {
+		exist, _ := stringInSlice(baseName, dirs)
+		if exist {
+			return &fuse.Attr{
+				Mode: fuse.S_IFDIR | 0755,
+			}, fuse.OK
+		}
+	}
+
+	// find attr in redis
 	key := nameToKey(name)
-	content, err1 := redis.String(fs.Conn.Do("GET", key))
-	list, err2 := redis.Strings(fs.Conn.Do("KEYS", key + ":*"))
+	content, err1 := redis.String(fs.conn.Do("GET", key))
+	list, err2 := redis.Strings(fs.conn.Do("KEYS", key + ":*"))
 
 	switch {
 	case err2 == nil && len(list) > 0:
@@ -50,7 +74,7 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 
 func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
 	pattern := nameToPattern(name)
-	res, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
+	res, err := redis.Strings(fs.conn.Do("KEYS", pattern))
 
 	if err != nil {
 		printError(err)
@@ -59,31 +83,44 @@ func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fus
 
 	entries := resToEntries(nameToKey(name), res)
 
+	if name == "" {
+		name = "."
+	}
+
+	if list, ok := fs.dirs[name]; ok {
+		for _, key := range list {
+			entries = append(entries, fuse.DirEntry{
+				Name: key,
+				Mode: fuse.S_IFDIR,
+			})
+		}
+	}
+
 	return entries, fuse.OK
 }
 
 func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
 	key := nameToKey(name)
-	_, err := fs.Conn.Do("EXISTS", key)
+	_, err := fs.conn.Do("EXISTS", key)
 
 	if err != nil {
 		printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return NewRedisFile(fs.Conn, key), fuse.OK
+	return NewRedisFile(fs.conn, key), fuse.OK
 }
 
 func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
 	key := nameToKey(name)
-	_, err := fs.Conn.Do("SET", key, "")
+	_, err := fs.conn.Do("SET", key, "")
 
 	if err != nil {
 		printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return NewRedisFile(fs.Conn, key), fuse.OK
+	return NewRedisFile(fs.conn, key), fuse.OK
 }
 
 func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
@@ -92,7 +129,7 @@ func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
 	}
 
 	key := nameToKey(name)
-	_, err := fs.Conn.Do("DEL", key)
+	_, err := fs.conn.Do("DEL", key)
 
 	if err != nil {
 		printError(err)
@@ -107,8 +144,22 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 		return fuse.OK
 	}
 
+	// check if name is in memory
+	dirName := path.Dir(name)
+	dir, ok := fs.dirs[dirName]
+	baseName := path.Base(name)
+	
+	if ok {
+		exist, index := stringInSlice(baseName, dir)
+		if exist {
+			fs.dirs[dirName] = append(dir[:index], dir[index + 1:]...)
+			return fuse.OK
+		}
+	}
+
+	// if name isn't in memory then find it in redis
 	pattern := nameToPattern(name)
-	list, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
+	list, err := redis.Strings(fs.conn.Do("KEYS", pattern))
 
 	if err != nil {
 		printError(err)
@@ -116,7 +167,7 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 	}
 
 	for _, el := range list {
-		_, err := fs.Conn.Do("DEL", el)
+		_, err := fs.conn.Do("DEL", el)
 		if err != nil {
 			printError(err)
 			return fuse.ENOENT
@@ -127,13 +178,15 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 }
 
 func (fs *RedisFs) Mkdir(name string, mode uint32, ctx *fuse.Context) fuse.Status {
-	key := nameToKey(name) + ":.redis-mount-folder"
-	_, err := fs.Conn.Do("SET", key, 1)
+	dir := path.Join(name, "..")
 
-	if err != nil {
-		printError(err)
-		return fuse.ENOENT
+	_, ok := fs.dirs[dir]
+
+	if !ok {
+		fs.dirs[dir] = make([]string, 0, 10)
 	}
+
+	fs.dirs[dir] = append(fs.dirs[dir], path.Base(name))
 
 	return fuse.OK
 }
@@ -214,4 +267,13 @@ func decodePathSeparator(str string) string {
 
 func printError(err error) {
 	fmt.Printf("  %s: %s\n", chalk.Magenta("Error"), err)
+}
+
+func stringInSlice(target string, list []string) (bool, int) {
+	for i, str := range list {
+		if str == target {
+			return true, i
+		}
+	}
+	return false, -1
 }

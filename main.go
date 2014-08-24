@@ -88,13 +88,13 @@ func mount(host string, port int, auth string, mnt string) (*fuse.Server, error)
 		return nil, err
 	}
 
-	fs := redisfs.RedisFs{ FileSystem: pathfs.NewDefaultFileSystem(), Conn: conn }
+	fs := redisfs.NewRedisFs(pathfs.NewDefaultFileSystem(), conn)
 
 	if (err != nil) {
 		return nil, err
 	}
 
-	nfs := pathfs.NewPathNodeFs(&fs, nil)
+	nfs := pathfs.NewPathNodeFs(fs, nil)
 	server, _, err := nodefs.MountRoot(mnt, nfs.Root(), nil)
 
 	if (err != nil) {
