@@ -18,11 +18,12 @@ Use Redis as a filesystem
 
 * fuse
 
-## Install
+## Download
 
-```bash
-$ go get github.com/poying/redis-mount
-```
+* [mac-amd64](https://github.com/poying/redis-mount/releases/download/20140824/redis-mount-darwin-amd64)
+* [linux-amd64](https://github.com/poying/redis-mount/releases/download/20140824/redis-mount-linux-amd64)
+* [linux-386](https://github.com/poying/redis-mount/releases/download/20140824/redis-mount-linux-386)
+* [linux-arm](https://github.com/poying/redis-mount/releases/download/20140824/redis-mount-linux-arm)
 
 ## Unmount
 
