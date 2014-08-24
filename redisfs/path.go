@@ -74,20 +74,10 @@ func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fus
 		return nil, fuse.ENOENT
 	}
 
-	entries := fs.resToEntries(fs.nameToKey(name), res)
-
-	if name == "" {
-		name = "."
-	}
-
-	if list, ok := fs.Dirs[name]; ok {
-		for _, key := range list {
-			entries = append(entries, fuse.DirEntry{
-				Name: key,
-				Mode: fuse.S_IFDIR,
-			})
-		}
-	}
+	m := make(map[string]bool)
+	entries := append(
+		fs.dirsToEntries(name, m),
+		fs.resToEntries(fs.nameToKey(name), res, m)...)
 
 	return entries, fuse.OK
 }
@@ -196,11 +186,30 @@ func (fs *RedisFs) nameToPattern(name string) string {
 	return pattern;
 }
 
-func (fs *RedisFs) resToEntries(root string, list []string) []fuse.DirEntry {
-	m := make(map[string]bool)
-	entries := make([]fuse.DirEntry, 0)
-	offset := len(root)
-	sepCount := strings.Count(root, string(os.PathSeparator)) + 1
+func (fs *RedisFs) dirsToEntries(dir string, m map[string]bool) []fuse.DirEntry {
+	entries := make([]fuse.DirEntry, 0, 2)
+
+	if dir == "" {
+		dir = "."
+	}
+
+	if list, ok := fs.Dirs[dir]; ok {
+		for _, key := range list {
+			m[key] = true
+			entries = append(entries, fuse.DirEntry{
+				Name: key,
+				Mode: fuse.S_IFDIR,
+			})
+		}
+	}
+
+	return entries
+}
+
+func (fs *RedisFs) resToEntries(dir string, list []string, m map[string]bool) []fuse.DirEntry {
+	entries := make([]fuse.DirEntry, 0, 2)
+	offset := len(dir)
+	sepCount := strings.Count(dir, string(os.PathSeparator)) + 1
 
 	if  offset != 0 {
 		offset += 1
@@ -217,9 +226,9 @@ func (fs *RedisFs) resToEntries(root string, list []string) []fuse.DirEntry {
 			})
 			break
 		case sepCount:
-			key = path.Clean(path.Join(fs.keyToName(key), ".."))
-			_, ok := m[key]
-			if !ok {
+			key = path.Join(fs.keyToName(key), "..")
+			
+			if _, ok := m[key]; !ok {
 				m[key] = true
 				entries = append(entries, fuse.DirEntry{
 					Name: key,
