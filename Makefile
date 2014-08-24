@@ -5,8 +5,6 @@ define build
 	GO_ENABLED=0 GOOS=$(1) GOARCH=$(2) go build -o "bin/$(APPNAME)-$(1)-$(2)" "main.go";
 endef
 
-all: clean test build
-
 test:
 	@go test -v ./redisfs
 
