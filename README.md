@@ -1,4 +1,4 @@
-redis-mount
+redis-mount [![Build Status](http://img.shields.io/travis/poying/redis-mount.svg?style=flat)](https://travis-ci.org/poying/redis-mount)
 ===========
 
 Use Redis as a filesystem
