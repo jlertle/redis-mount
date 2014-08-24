@@ -1,10 +1,20 @@
+APPNAME=redis-mount
+
+define build
+	echo $(APPNAME)-$(1)-$(2); \
+	GO_ENABLED=0 GOOS=$(1) GOARCH=$(2) go build -o "bin/$(APPNAME)-$(1)-$(2)" "main.go";
+endef
+
 all: clean test build
 
 test:
 	@go test -v ./redisfs
 
 build:
-	@go build main.go
+	@$(call build,linux,amd64)
+	@$(call build,linux,386)
+	@$(call build,linux,arm)
+	@$(call build,darwin,amd64)
 
 get-deps:
 	@go get github.com/poying/go-chalk
@@ -14,6 +24,4 @@ get-deps:
 	@go get github.com/smartystreets/goconvey/convey
 
 clean:
-	-@rm main
-
-.PHONY: main.a
+	-@rm -r bin
