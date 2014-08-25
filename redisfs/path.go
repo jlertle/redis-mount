@@ -15,7 +15,7 @@ type RedisFs struct {
 	pathfs.FileSystem
 	Conn redis.Conn
 	Dirs map[string][]string
-	Sep string
+	Sep  string
 }
 
 func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Status) {
@@ -46,20 +46,20 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 	// find attr in redis
 	key := fs.nameToKey(name)
 	content, err1 := redis.String(fs.Conn.Do("GET", key))
-	list, err2 := redis.Strings(fs.Conn.Do("KEYS", key + fs.Sep + "*"))
+	list, err2 := redis.Strings(fs.Conn.Do("KEYS", key+fs.Sep+"*"))
 
 	switch {
 	case err2 == nil && len(list) > 0:
 		return &fuse.Attr{
 			Mode: fuse.S_IFDIR | 0755,
 		}, fuse.OK
-		break;
+		break
 	case err1 == nil:
 		return &fuse.Attr{
 			Mode: fuse.S_IFREG | 0644,
 			Size: uint64(len(content)),
 		}, fuse.OK
-		break;
+		break
 	}
 
 	return nil, fuse.ENOENT
@@ -131,11 +131,11 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 	dirName := path.Dir(name)
 	dir, ok := fs.Dirs[dirName]
 	baseName := path.Base(name)
-	
+
 	if ok {
 		exist, index := fs.stringInSlice(baseName, dir)
 		if exist {
-			fs.Dirs[dirName] = append(dir[:index], dir[index + 1:]...)
+			fs.Dirs[dirName] = append(dir[:index], dir[index+1:]...)
 			return fuse.OK
 		}
 	}
@@ -183,7 +183,7 @@ func (fs *RedisFs) nameToPattern(name string) string {
 		pattern += fs.Sep + "*"
 	}
 
-	return pattern;
+	return pattern
 }
 
 func (fs *RedisFs) dirsToEntries(dir string, m map[string]bool) []fuse.DirEntry {
@@ -211,7 +211,7 @@ func (fs *RedisFs) resToEntries(dir string, list []string, m map[string]bool) []
 	offset := len(dir)
 	sepCount := strings.Count(dir, string(os.PathSeparator)) + 1
 
-	if  offset != 0 {
+	if offset != 0 {
 		offset += 1
 	}
 
@@ -227,7 +227,7 @@ func (fs *RedisFs) resToEntries(dir string, list []string, m map[string]bool) []
 			break
 		case sepCount:
 			key = path.Join(fs.keyToName(key), "..")
-			
+
 			if _, ok := m[key]; !ok {
 				m[key] = true
 				entries = append(entries, fuse.DirEntry{
@@ -258,13 +258,13 @@ func (fs *RedisFs) keyToName(key string) string {
 func (fs *RedisFs) encodePathSeparator(str string) string {
 	re := regexp.MustCompile(string(os.PathSeparator))
 	str = re.ReplaceAllLiteralString(str, "\uffff")
-	return str;
+	return str
 }
 
 func (fs *RedisFs) decodePathSeparator(str string) string {
 	re := regexp.MustCompile("\uffff")
 	str = re.ReplaceAllLiteralString(str, string(os.PathSeparator))
-	return str;
+	return str
 }
 
 func (fs *RedisFs) printError(err error) {

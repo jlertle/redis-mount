@@ -9,10 +9,10 @@ import "github.com/poying/redis-mount/redisfs"
 import . "github.com/smartystreets/goconvey/convey"
 
 func TestRedisFile(t *testing.T) {
-	Convey("Write", t, func () {
+	Convey("Write", t, func() {
 		conn := dialTestDB()
 
-		Convey("should work", func () {
+		Convey("should work", func() {
 			data := []byte("Ghost Island Taiwan")
 
 			_, err := conn.Do("SET", "writing", "")
@@ -30,15 +30,15 @@ func TestRedisFile(t *testing.T) {
 			So(res, ShouldEqual, string(data))
 		})
 
-		Reset(func () {
+		Reset(func() {
 			conn.Close()
 		})
 	})
 
-	Convey("Read", t, func () {
+	Convey("Read", t, func() {
 		conn := dialTestDB()
 
-		Convey("should work", func () {
+		Convey("should work", func() {
 			file := redisfs.NewRedisFile(conn, "reading")
 			data := []byte("QQ")
 			_, err := conn.Do("SET", "reading", string(data))
@@ -48,13 +48,13 @@ func TestRedisFile(t *testing.T) {
 			}
 
 			buf := make([]byte, 100)
-			res , code := file.Read(buf, 0)
+			res, code := file.Read(buf, 0)
 
 			So(code, ShouldEqual, fuse.OK)
 			So(res.Size(), ShouldEqual, len(data))
 		})
 
-		Reset(func () {
+		Reset(func() {
 			conn.Close()
 		})
 	})
@@ -79,7 +79,7 @@ func (t testConn) Close() error {
 }
 
 func dialTestDB() redis.Conn {
-	c, err := redis.DialTimeout("tcp", ":6379", 0, 1 * time.Second, 1 * time.Second)
+	c, err := redis.DialTimeout("tcp", ":6379", 0, 1*time.Second, 1*time.Second)
 	if err != nil {
 		panic(err)
 	}

@@ -9,7 +9,7 @@ import "github.com/hanwen/go-fuse/fuse/nodefs"
 
 type redisFile struct {
 	conn redis.Conn
-	key string
+	key  string
 }
 
 func NewRedisFile(conn redis.Conn, key string) nodefs.File {
@@ -64,7 +64,7 @@ func (f *redisFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	if end > len(originalData) {
 		rightChunk = []byte{}
 	} else {
-		rightChunk = data[int(off) + len(data):]
+		rightChunk = data[int(off)+len(data):]
 	}
 
 	newValue := bytes.NewBuffer(leftChunk)
@@ -73,7 +73,7 @@ func (f *redisFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	newValue.Write(rightChunk)
 
 	_, err = f.conn.Do("SET", f.key, newValue.String())
-	
+
 	if err != nil {
 		log.Println("Error:", err)
 		return 0, fuse.EIO
