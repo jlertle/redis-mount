@@ -1,7 +1,10 @@
-redis-mount [![Build Status](http://img.shields.io/travis/poying/redis-mount.svg?style=flat)](https://travis-ci.org/poying/redis-mount)
+redis-mount
 ===========
 
 redis-mount lets you use Redis as a filesystem.
+
+[![Build Status](http://img.shields.io/travis/poying/redis-mount.svg?style=flat)](https://travis-ci.org/poying/redis-mount)
+[![pre-release](http://img.shields.io/badge/pre--release-20140824-yellow.svg?style=flat)](https://github.com/poying/redis-mount/releases/tag/20140824)
 
 ```bash
 redis-mount 0.0.0
