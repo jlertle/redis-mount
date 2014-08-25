@@ -15,11 +15,14 @@ test:
 run:
 	@go run $(ENTRYPOINT)
 
-build:
+cross:
 	@$(call build,linux,amd64)
 	@$(call build,linux,386)
 	@$(call build,linux,arm)
 	@$(call build,darwin,amd64)
+
+build:
+	@go build
 
 get-deps:
 	@go get github.com/poying/go-chalk

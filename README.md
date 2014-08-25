@@ -51,7 +51,7 @@ It is easy to build redis-mount from the source code. It takes four steps:
   
   to install dependencies.
 
-4. Run `go build` and then you can see a binary file in current directory.
+4. Run `make build` and then you can see a binary file in current directory.
 
 ### Run Unit Tests
 
