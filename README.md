@@ -50,11 +50,6 @@ It is easy to build redis-mount from the source code. It takes four steps:
 
 4. Run `go build` and then you can see a binary file in current directory.
 
-```bash
-$ git clone git@github.com:poying/redis-mount.git
-$ cd redis-mount
-```
-
 ### Run Unit Tests
 
 ```bash
