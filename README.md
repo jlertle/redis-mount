@@ -31,10 +31,6 @@ $ redis-mount ~/redis
 
 ### Build from source
 
-#### Requirement
-
-* fuse
-
 It is easy to build redis-mount from the source code. It takes four steps:
 
 1. Install `fuse` ([linux](http://fuse.sourceforge.net/), [mac](http://osxfuse.github.io/)).
