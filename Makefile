@@ -9,11 +9,13 @@ define build
 	GO_ENABLED=0 GOOS=$(1) GOARCH=$(2) go build -o "bin/$(APPNAME)-$(1)-$(2)" $(ENTRYPOINT);
 endef
 
+RUN_ARGS=$(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+
 test:
 	@go test -v ./redisfs
 
 run:
-	@go run $(ENTRYPOINT)
+	@go run $(ENTRYPOINT) $(RUN_ARGS)
 
 cross:
 	@$(call build,linux,amd64)
