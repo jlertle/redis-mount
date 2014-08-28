@@ -286,16 +286,18 @@ func (fs *RedisFs) resToEntries(dir string, list []string, m map[string]bool) []
 
 	for _, el := range list {
 		key := el[offset:]
+		keySepCount := strings.Count(key, fs.Sep)
 
-		switch strings.Count(key, fs.Sep) {
-		case 0:
+		switch true {
+		case keySepCount == 0:
 			entries = append(entries, fuse.DirEntry{
 				Name: fs.keyToName(key),
 				Mode: fuse.S_IFREG,
 			})
 			break
-		case sepCount:
-			key = path.Join(fs.keyToName(key), "..")
+		case keySepCount >= sepCount:
+			tmp := strings.SplitN(key, fs.Sep, 2)
+			key = tmp[0]
 
 			if _, ok := m[key]; !ok {
 				m[key] = true
