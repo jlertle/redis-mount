@@ -4,7 +4,7 @@ redis-mount
 redis-mount lets you use Redis as a filesystem.
 
 [![Build Status](http://img.shields.io/travis/poying/redis-mount.svg?style=flat)](https://travis-ci.org/poying/redis-mount)
-[![pre-release](http://img.shields.io/badge/pre--release-20140828-yellow.svg?style=flat)](https://github.com/poying/redis-mount/releases/tag/20140828)
+[![pre-release](http://img.shields.io/badge/pre--release-20140829-yellow.svg?style=flat)](https://github.com/poying/redis-mount/releases/tag/20140829)
 
 ```bash
 redis-mount 0.0.0
@@ -27,10 +27,10 @@ $ redis-mount ~/redis
 
 ### Download binary file
 
-* [mac-amd64](https://github.com/poying/redis-mount/releases/download/20140828/redis-mount-darwin-amd64)
-* [linux-amd64](https://github.com/poying/redis-mount/releases/download/20140828/redis-mount-linux-amd64)
-* [linux-386](https://github.com/poying/redis-mount/releases/download/20140828/redis-mount-linux-386)
-* [linux-arm](https://github.com/poying/redis-mount/releases/download/20140828/redis-mount-linux-arm)
+* [mac-amd64](https://github.com/poying/redis-mount/releases/download/20140829/redis-mount-darwin-amd64)
+* [linux-amd64](https://github.com/poying/redis-mount/releases/download/20140829/redis-mount-linux-amd64)
+* [linux-386](https://github.com/poying/redis-mount/releases/download/20140829/redis-mount-linux-386)
+* [linux-arm](https://github.com/poying/redis-mount/releases/download/20140829/redis-mount-linux-arm)
 
 ### Build from source
 
