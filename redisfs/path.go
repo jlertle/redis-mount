@@ -137,6 +137,37 @@ func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Cont
 	return NewRedisFile(fs.pool, key), fuse.OK
 }
 
+func (fs *RedisFs) Rename(oldName string, newName string, ctx *fuse.Context) fuse.Status {
+	oldKey := fs.nameToKey(oldName)
+	newKey := fs.nameToKey(newName)
+	
+	conn := fs.pool.Get()
+	defer conn.Close()
+
+	// get file content
+	content, err := redis.String(conn.Do("GET", oldKey))
+
+	if err != nil {
+		return fuse.ENOENT
+	}
+
+	// create new file
+	_, err = conn.Do("SET", newKey, content)
+
+	if err != nil {
+		return fuse.ENOENT
+	}
+
+	// delete old file
+	_, err = conn.Do("DEL", oldKey)
+
+	if err != nil {
+		return fuse.ENOENT
+	}
+
+	return fuse.OK
+}
+
 func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
 	if name == "" {
 		return fuse.OK
