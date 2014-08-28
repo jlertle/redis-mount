@@ -3,12 +3,10 @@ package main
 import "os"
 import "fmt"
 import "strings"
-import "strconv"
 import "path/filepath"
 import "github.com/poying/go-chalk"
 import "github.com/codegangsta/cli"
 import "github.com/hanwen/go-fuse/fuse"
-import "github.com/garyburd/redigo/redis"
 import "github.com/hanwen/go-fuse/fuse/pathfs"
 import "github.com/hanwen/go-fuse/fuse/nodefs"
 import "github.com/poying/redis-mount/redisfs"
@@ -89,25 +87,16 @@ func mount(ctx *cli.Context) (*fuse.Server, error) {
 		return nil, err
 	}
 
-	conn, err := newRedisConn(
-		ctx.String("host"),
-		ctx.Int("port"),
-		ctx.String("auth"))
-
-	if err != nil {
-		return nil, err
-	}
-
 	fs := &redisfs.RedisFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
-		Conn:       conn,
+		Host:				ctx.String("host"),
+		Port:       ctx.Int("port"),
+		Auth:				ctx.String("auth"),
 		Dirs:       make(map[string][]string),
 		Sep:        ctx.String("sep"),
 	}
 
-	if err != nil {
-		return nil, err
-	}
+	fs.Init()
 
 	nfs := pathfs.NewPathNodeFs(fs, nil)
 	server, _, err := nodefs.MountRoot(mnt, nfs.Root(), nil)
@@ -117,24 +106,6 @@ func mount(ctx *cli.Context) (*fuse.Server, error) {
 	}
 
 	return server, nil
-}
-
-func newRedisConn(host string, port int, auth string) (redis.Conn, error) {
-	address := host + ":" + strconv.Itoa(port)
-	conn, err := redis.Dial("tcp", address)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(auth) > 0 {
-		if _, err := conn.Do("AUTH", auth); err != nil {
-			conn.Close()
-			return nil, err
-		}
-	}
-
-	return conn, nil
 }
 
 func PrintHelpMessage() {

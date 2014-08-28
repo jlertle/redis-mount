@@ -1,11 +1,10 @@
 package redisfs
 
 import "os"
-import "fmt"
+import "log"
 import "path"
 import "regexp"
 import "strings"
-import "github.com/poying/go-chalk"
 import "github.com/hanwen/go-fuse/fuse"
 import "github.com/garyburd/redigo/redis"
 import "github.com/hanwen/go-fuse/fuse/nodefs"
@@ -13,9 +12,28 @@ import "github.com/hanwen/go-fuse/fuse/pathfs"
 
 type RedisFs struct {
 	pathfs.FileSystem
-	Conn redis.Conn
+	Host string
+	Port int
+	Auth string
 	Dirs map[string][]string
 	Sep  string
+	pool *redis.Pool
+}
+
+func (fs *RedisFs) Init() {
+	pool := &redis.Pool{
+		MaxIdle: 2,
+		MaxActive: 20,
+		Dial: func () (redis.Conn, error) {
+			return fs.CreateRedisConn()
+		},
+	}
+
+	fs.pool = pool
+}
+
+func (fs *RedisFs) CreateRedisConn() (redis.Conn, error) {
+	return NewRedisConn(fs.Host, fs.Port, fs.Auth)
 }
 
 func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Status) {
@@ -43,10 +61,14 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 		}
 	}
 
+	// Open connection
+	conn := fs.pool.Get()
+	defer conn.Close()
+
 	// find attr in redis
 	key := fs.nameToKey(name)
-	content, err1 := redis.String(fs.Conn.Do("GET", key))
-	list, err2 := redis.Strings(fs.Conn.Do("KEYS", key+fs.Sep+"*"))
+	content, err1 := redis.String(conn.Do("GET", key))
+	list, err2 := redis.Strings(conn.Do("KEYS", key+fs.Sep+"*"))
 
 	switch {
 	case err2 == nil && len(list) > 0:
@@ -66,8 +88,11 @@ func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Sta
 }
 
 func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
+	conn := fs.pool.Get()
+	defer conn.Close()
+
 	pattern := fs.nameToPattern(name)
-	res, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
+	res, err := redis.Strings(conn.Do("KEYS", pattern))
 
 	if err != nil {
 		fs.printError(err)
@@ -83,27 +108,33 @@ func (fs *RedisFs) OpenDir(name string, ctx *fuse.Context) ([]fuse.DirEntry, fus
 }
 
 func (fs *RedisFs) Open(name string, flags uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
+	conn := fs.pool.Get()
+	defer conn.Close()
+
 	key := fs.nameToKey(name)
-	_, err := fs.Conn.Do("EXISTS", key)
+	_, err := conn.Do("EXISTS", key)
 
 	if err != nil {
 		fs.printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return NewRedisFile(fs.Conn, key), fuse.OK
+	return NewRedisFile(fs.pool, key), fuse.OK
 }
 
 func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Context) (nodefs.File, fuse.Status) {
+	conn := fs.pool.Get()
+	defer conn.Close()
+
 	key := fs.nameToKey(name)
-	_, err := fs.Conn.Do("SET", key, "")
+	_, err := conn.Do("SET", key, "")
 
 	if err != nil {
 		fs.printError(err)
 		return nil, fuse.ENOENT
 	}
 
-	return NewRedisFile(fs.Conn, key), fuse.OK
+	return NewRedisFile(fs.pool, key), fuse.OK
 }
 
 func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
@@ -111,8 +142,11 @@ func (fs *RedisFs) Unlink(name string, ctx *fuse.Context) fuse.Status {
 		return fuse.OK
 	}
 
+	conn := fs.pool.Get()
+	defer conn.Close()
+
 	key := fs.nameToKey(name)
-	_, err := fs.Conn.Do("DEL", key)
+	_, err := conn.Do("DEL", key)
 
 	if err != nil {
 		fs.printError(err)
@@ -140,9 +174,13 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 		}
 	}
 
+	// open connection
+	conn := fs.pool.Get()
+	defer conn.Close()
+
 	// if name isn't in memory then find it in redis
 	pattern := fs.nameToPattern(name)
-	list, err := redis.Strings(fs.Conn.Do("KEYS", pattern))
+	list, err := redis.Strings(conn.Do("KEYS", pattern))
 
 	if err != nil {
 		fs.printError(err)
@@ -150,7 +188,7 @@ func (fs *RedisFs) Rmdir(name string, ctx *fuse.Context) fuse.Status {
 	}
 
 	for _, el := range list {
-		_, err := fs.Conn.Do("DEL", el)
+		_, err := conn.Do("DEL", el)
 		if err != nil {
 			fs.printError(err)
 			return fuse.ENOENT
@@ -268,7 +306,7 @@ func (fs *RedisFs) decodePathSeparator(str string) string {
 }
 
 func (fs *RedisFs) printError(err error) {
-	fmt.Printf("  %s: %s\n", chalk.Magenta("Error"), err)
+	log.Println("Error:", err)
 }
 
 func (fs *RedisFs) stringInSlice(target string, list []string) (bool, int) {

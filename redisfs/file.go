@@ -8,13 +8,13 @@ import "github.com/garyburd/redigo/redis"
 import "github.com/hanwen/go-fuse/fuse/nodefs"
 
 type redisFile struct {
-	conn redis.Conn
+	pool *redis.Pool
 	key  string
 }
 
-func NewRedisFile(conn redis.Conn, key string) nodefs.File {
+func NewRedisFile(pool *redis.Pool, key string) nodefs.File {
 	file := new(redisFile)
-	file.conn = conn
+	file.pool = pool
 	file.key = key
 	return file
 }
@@ -31,7 +31,10 @@ func (f *redisFile) String() string {
 }
 
 func (f *redisFile) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
-	data, err := redis.Bytes(f.conn.Do("GET", f.key))
+	conn := f.pool.Get()
+	defer conn.Close()
+
+	data, err := redis.Bytes(conn.Do("GET", f.key))
 
 	if err != nil {
 		log.Println("ERROR:", err)
@@ -49,7 +52,10 @@ func (f *redisFile) Read(buf []byte, off int64) (fuse.ReadResult, fuse.Status) {
 }
 
 func (f *redisFile) Write(data []byte, off int64) (uint32, fuse.Status) {
-	originalData, err := redis.Bytes(f.conn.Do("GET", f.key))
+	conn := f.pool.Get()
+	defer conn.Close()
+
+	originalData, err := redis.Bytes(conn.Do("GET", f.key))
 
 	if err != nil {
 		log.Println("Error:", err)
@@ -72,7 +78,7 @@ func (f *redisFile) Write(data []byte, off int64) (uint32, fuse.Status) {
 	newValue.Write(data)
 	newValue.Write(rightChunk)
 
-	_, err = f.conn.Do("SET", f.key, newValue.String())
+	_, err = conn.Do("SET", f.key, newValue.String())
 
 	if err != nil {
 		log.Println("Error:", err)
@@ -90,7 +96,10 @@ func (f *redisFile) Release() {
 }
 
 func (f *redisFile) GetAttr(out *fuse.Attr) fuse.Status {
-	content, err := redis.String(f.conn.Do("GET", f.key))
+	conn := f.pool.Get()
+	defer conn.Close()
+
+	content, err := redis.String(conn.Do("GET", f.key))
 
 	if err != nil {
 		log.Println("Error:", err)
