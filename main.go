@@ -2,9 +2,7 @@ package main
 
 import "os"
 import "fmt"
-import "strings"
 import "path/filepath"
-import "github.com/poying/go-chalk"
 import "github.com/codegangsta/cli"
 import "github.com/hanwen/go-fuse/fuse"
 import "github.com/hanwen/go-fuse/fuse/pathfs"
@@ -21,41 +19,51 @@ var Version = "0.0.0"
 
 // redis host name
 var HostFlag = cli.StringFlag{
-	Name:  "host, h",
+	Name:  "host",
 	Value: "localhost",
-	Usage: "Redis host name",
+	Usage: "set redis host name",
 }
 
 // redis port number
 var PortFlag = cli.IntFlag{
-	Name:  "port, p",
+	Name:  "port",
 	Value: 6379,
-	Usage: "Redis port number",
+	Usage: "set redis port number",
 }
 
 // redis port number
 var DbFlag = cli.IntFlag{
-	Name:  "db, d",
+	Name:  "db",
 	Value: 0,
-	Usage: "Redis database",
+	Usage: "set redis database",
 }
 
 // redis password
 var AuthFlag = cli.StringFlag{
-	Name:  "auth, a",
-	Usage: "Redis password",
+	Name:  "auth",
+	Usage: "set redis password",
 }
 
 // redis key separator
 var SepFlag = cli.StringFlag{
-	Name:  "sep, s",
+	Name:  "sep",
 	Value: ":",
-	Usage: "Redis key separator",
+	Usage: "set redis key separator",
 }
 
+// help message template
+var AppHelpTemplate = "" +
+	"\n" +
+	"  \u001b[36m{{.Name}}\u001b[39m \u001b[33m{{.Version}}\u001b[39m\n" +
+	"  $ mkdir /tmp/redis && {{.Name}} /tmp/redis\n" +
+	"\n" +
+	"  {{range .Flags}}{{.}}\n" +
+	"  {{end}}\n"
+
 func main() {
+	cli.AppHelpTemplate = AppHelpTemplate
+
 	App = cli.NewApp()
-	App.HideHelp = true
 	App.Name = Name
 	App.Version = Version
 
@@ -74,14 +82,14 @@ func main() {
 
 func run(ctx *cli.Context) {
 	if len(ctx.Args()) == 0 {
-		PrintHelpMessage()
+		cli.ShowAppHelp(ctx)
 		return
 	}
 
 	server, err := mount(ctx)
 
 	if err != nil {
-		fmt.Printf("\n  %s: %s\n\n", chalk.Magenta("Error"), err)
+		fmt.Printf("\n  \u001b[35m%s\u001b[39m: %s\n\n", "Error", err)
 		return
 	}
 
@@ -115,50 +123,4 @@ func mount(ctx *cli.Context) (*fuse.Server, error) {
 	}
 
 	return server, nil
-}
-
-func PrintHelpMessage() {
-	println()
-	fmt.Printf("  %s %s\n", chalk.Cyan(App.Name), chalk.Green(App.Version))
-	println("  $ redis-mount ~/redis")
-	println()
-
-	fmt.Printf("  %-12s %-12v %s\n",
-		prefixNames(HostFlag.Name), HostFlag.Value, HostFlag.Usage)
-
-	fmt.Printf("  %-12s %-12v %s\n",
-		prefixNames(PortFlag.Name), PortFlag.Value, PortFlag.Usage)
-
-	fmt.Printf("  %-12s %-12v %s\n",
-		prefixNames(DbFlag.Name), DbFlag.Value, DbFlag.Usage)
-
-	fmt.Printf("  %-12s %-12v %s\n",
-		prefixNames(AuthFlag.Name), AuthFlag.Value, AuthFlag.Usage)
-
-	fmt.Printf("  %-12s %-12v %s\n",
-		prefixNames(SepFlag.Name), SepFlag.Value, SepFlag.Usage)
-
-	println()
-}
-
-func prefixNames(fullName string) (prefixed string) {
-	first := true
-	parts := strings.Split(fullName, ",")
-
-	for _, name := range parts {
-		name = strings.Trim(name, " ")
-
-		if len(name) == 1 {
-			prefixed += "-" + name
-		} else {
-			prefixed += "--" + name
-		}
-
-		if first {
-			first = false
-			prefixed += ", "
-		}
-	}
-
-	return
 }
