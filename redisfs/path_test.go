@@ -7,7 +7,7 @@ import . "github.com/smartystreets/goconvey/convey"
 func TestRedisFs(t *testing.T) {
 	fs := &RedisFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
-		Host:				"127.0.0.1",
+		Host:       "127.0.0.1",
 		Port:       6379,
 		Db:         9,
 		Dirs:       make(map[string][]string),
@@ -34,8 +34,8 @@ func TestRedisFs(t *testing.T) {
 
 	Convey("RedisFs#stringInSlice()", t, func() {
 		Convey("check if specific string is in slice", func() {
-			sliceOne := []string{ "foo", "bar", "baz" }
-			sliceTwo := []string{ "foo", "baz" }
+			sliceOne := []string{"foo", "bar", "baz"}
+			sliceTwo := []string{"foo", "baz"}
 
 			resOneExist, resOneIndex := fs.stringInSlice("bar", sliceOne)
 			resTwoExist, resTwoIndex := fs.stringInSlice("bar", sliceTwo)

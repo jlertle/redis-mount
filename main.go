@@ -105,10 +105,10 @@ func mount(ctx *cli.Context) (*fuse.Server, error) {
 
 	fs := &redisfs.RedisFs{
 		FileSystem: pathfs.NewDefaultFileSystem(),
-		Host:				ctx.String("host"),
+		Host:       ctx.String("host"),
 		Port:       ctx.Int("port"),
 		Db:         ctx.Int("db"),
-		Auth:				ctx.String("auth"),
+		Auth:       ctx.String("auth"),
 		Dirs:       make(map[string][]string),
 		Sep:        ctx.String("sep"),
 	}

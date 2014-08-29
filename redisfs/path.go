@@ -23,9 +23,9 @@ type RedisFs struct {
 
 func (fs *RedisFs) Init() {
 	pool := &redis.Pool{
-		MaxIdle: 2,
+		MaxIdle:   2,
 		MaxActive: 20,
-		Dial: func () (redis.Conn, error) {
+		Dial: func() (redis.Conn, error) {
 			return fs.CreateRedisConn()
 		},
 	}
@@ -141,7 +141,7 @@ func (fs *RedisFs) Create(name string, flags uint32, mode uint32, ctx *fuse.Cont
 func (fs *RedisFs) Rename(oldName string, newName string, ctx *fuse.Context) fuse.Status {
 	oldKey := fs.nameToKey(oldName)
 	newKey := fs.nameToKey(newName)
-	
+
 	conn := fs.pool.Get()
 	defer conn.Close()
 

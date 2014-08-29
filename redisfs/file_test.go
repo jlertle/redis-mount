@@ -11,7 +11,7 @@ func TestRedisFile(t *testing.T) {
 		Dial: dialTestDB,
 	}
 
-	defer func () {
+	defer func() {
 		conn := pool.Get()
 		conn.Do("FLUSHALL")
 		conn.Close()
