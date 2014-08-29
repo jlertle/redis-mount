@@ -1,10 +1,9 @@
-package redisfs_test
+package redisfs
 
 import "time"
 import "testing"
 import "github.com/hanwen/go-fuse/fuse"
 import "github.com/garyburd/redigo/redis"
-import "github.com/poying/redis-mount/redisfs"
 import . "github.com/smartystreets/goconvey/convey"
 
 func TestRedisFile(t *testing.T) {
@@ -28,7 +27,7 @@ func TestRedisFile(t *testing.T) {
 
 			_, err := conn.Do("SET", "writing", "")
 
-			file := redisfs.NewRedisFile(pool, "writing")
+			file := NewRedisFile(pool, "writing")
 			_, code := file.Write(data, 0)
 
 			So(code, ShouldEqual, fuse.OK)
@@ -47,7 +46,7 @@ func TestRedisFile(t *testing.T) {
 			conn := pool.Get()
 			defer conn.Close()
 
-			file := redisfs.NewRedisFile(pool, "reading")
+			file := NewRedisFile(pool, "reading")
 			data := []byte("QQ")
 			_, err := conn.Do("SET", "reading", string(data))
 
