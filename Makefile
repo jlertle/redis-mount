@@ -27,7 +27,6 @@ build:
 	@go build
 
 get-deps:
-	@go get github.com/poying/go-chalk
 	@go get github.com/codegangsta/cli
 	@go get github.com/hanwen/go-fuse/fuse
 	@go get github.com/visionmedia/go-debug
