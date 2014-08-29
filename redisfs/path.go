@@ -16,6 +16,7 @@ type RedisFs struct {
 	Port int
 	Auth string
 	Dirs map[string][]string
+	Db   int
 	Sep  string
 	pool *redis.Pool
 }
@@ -33,7 +34,7 @@ func (fs *RedisFs) Init() {
 }
 
 func (fs *RedisFs) CreateRedisConn() (redis.Conn, error) {
-	return NewRedisConn(fs.Host, fs.Port, fs.Auth)
+	return NewRedisConn(fs.Host, fs.Port, fs.Db, fs.Auth)
 }
 
 func (fs *RedisFs) GetAttr(name string, ctx *fuse.Context) (*fuse.Attr, fuse.Status) {

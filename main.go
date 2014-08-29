@@ -33,6 +33,13 @@ var PortFlag = cli.IntFlag{
 	Usage: "Redis port number",
 }
 
+// redis port number
+var DbFlag = cli.IntFlag{
+	Name:  "db, d",
+	Value: 0,
+	Usage: "Redis database",
+}
+
 // redis password
 var AuthFlag = cli.StringFlag{
 	Name:  "auth, a",
@@ -55,6 +62,7 @@ func main() {
 	App.Flags = []cli.Flag{
 		HostFlag,
 		PortFlag,
+		DbFlag,
 		AuthFlag,
 		SepFlag,
 	}
@@ -91,6 +99,7 @@ func mount(ctx *cli.Context) (*fuse.Server, error) {
 		FileSystem: pathfs.NewDefaultFileSystem(),
 		Host:				ctx.String("host"),
 		Port:       ctx.Int("port"),
+		Db:         ctx.Int("db"),
 		Auth:				ctx.String("auth"),
 		Dirs:       make(map[string][]string),
 		Sep:        ctx.String("sep"),
@@ -119,6 +128,9 @@ func PrintHelpMessage() {
 
 	fmt.Printf("  %-12s %-12v %s\n",
 		prefixNames(PortFlag.Name), PortFlag.Value, PortFlag.Usage)
+
+	fmt.Printf("  %-12s %-12v %s\n",
+		prefixNames(DbFlag.Name), DbFlag.Value, DbFlag.Usage)
 
 	fmt.Printf("  %-12s %-12v %s\n",
 		prefixNames(AuthFlag.Name), AuthFlag.Value, AuthFlag.Usage)
